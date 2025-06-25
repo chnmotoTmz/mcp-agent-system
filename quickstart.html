@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Agent System - Gemini Edition - Quick Start</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #4285f4 0%, #34a853 50%, #ea4335 100%);
+            margin: 0;
+            padding: 20px;
+            color: white;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        .subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        .step {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 10px;
+            border-left: 4px solid #34a853;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            background: #34a853;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            background: #2d8f47;
+            transform: translateY(-2px);
+        }
+        .btn.google {
+            background: #4285f4;
+        }
+        .btn.google:hover {
+            background: #3367d6;
+        }
+        .code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+        }
+        .warning {
+            background: rgba(255, 193, 7, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin: 15px 0;
+        }
+        .feature {
+            background: rgba(52, 168, 83, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #34a853;
+            margin: 15px 0;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ea4335;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+        .status-indicator.online {
+            background: #34a853;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .gemini-logo {
+            text-align: center;
+            font-size: 3em;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="gemini-logo">🤖✨</div>
+        <h1>🚀 MCP Agent System</h1>
+        <div class="subtitle">Powered by Google Gemini Pro</div>
+        
+        <div class="feature">
+            <h3>🌟 Gemini Edition の新機能</h3>
+            <ul>
+                <li><strong>Google Gemini Pro統合</strong> - 高性能な対話AI</li>
+                <li><strong>日本語特化エージェント</strong> - 自然な日本語対話</li>
+                <li><strong>改善されたレスポンス</strong> - より人間らしい応答</li>
+                <li><strong>多様なスキル</strong> - コード生成から創作まで</li>
+            </ul>
+        </div>
+        
+        <div class="step">
+            <h3>📋 起動手順</h3>
+            <p><strong>Step 1:</strong> Google AI Studio でAPIキー取得</p>
+            <div class="code">
+                <a href="https://makersuite.google.com/app/apikey" target="_blank" style="color: #34a853;">
+                    https://makersuite.google.com/app/apikey
+                </a>
+            </div>
+            
+            <p><strong>Step 2:</strong> APIキー設定</p>
+            <div class="code">
+                start-server.bat を編集して、your_gemini_api_key_here を実際のAPIキーに置き換え
+            </div>
+            
+            <p><strong>Step 3:</strong> サーバー起動</p>
+            <div class="code">
+                start-server.bat をダブルクリック
+            </div>
+            
+            <p><strong>Step 4:</strong> フロントエンド開始</p>
+            <div class="code">
+                frontend/index.html をブラウザで開く
+            </div>
+        </div>
+        
+        <div class="warning">
+            <h4>⚠️ 重要な変更点</h4>
+            <p><strong>OpenAI → Google Gemini</strong> に変更されました。</p>
+            <p>環境変数名が <code>OPENAI_API_KEY</code> から <code>GEMINI_API_KEY</code> に変更されています。</p>
+            <p>Google AI Studio で無料のAPIキーを取得してください。</p>
+        </div>
+        
+        <div class="step">
+            <h3>🔧 クイックアクション</h3>
+            <a href="https://makersuite.google.com/app/apikey" class="btn google" target="_blank">🔑 Gemini APIキー取得</a>
+            <a href="start-server.bat" class="btn">📡 サーバー起動</a>
+            <a href="frontend/index.html" class="btn">🖥️ フロントエンド開始</a>
+            <a href="https://github.com/chnmotoTmz/mcp-agent-system" class="btn" target="_blank">📚 GitHub リポジトリ</a>
+        </div>
+        
+        <div class="step">
+            <h3>📊 システム状態</h3>
+            <p>
+                <span class="status-indicator" id="serverStatus"></span>
+                <span id="statusText">サーバー接続確認中...</span>
+            </p>
+            <p>サーバー起動後、以下でステータス確認:</p>
+            <div class="code">
+                <a href="http://localhost:8080/api/health" target="_blank" style="color: #34a853;">http://localhost:8080/api/health</a>
+            </div>
+        </div>
+        
+        <div class="step">
+            <h3>🤖 利用可能エージェント (Gemini対応)</h3>
+            <ul>
+                <li><strong>汎用アシスタント</strong> - 一般的な質問対応</li>
+                <li><strong>技術エキスパート</strong> - プログラミング・システム設計</li>
+                <li><strong>クリエイティブ・ディレクター</strong> - 創造的なアイデア生成</li>
+                <li><strong>データアナリスト</strong> - 論理的分析・データ処理</li>
+                <li><strong>日本語スペシャリスト</strong> - 日本語特化対話 <span style="color: #34a853;">[NEW]</span></li>
+            </ul>
+        </div>
+        
+        <div class="step">
+            <h3>🔍 API エンドポイント</h3>
+            <ul>
+                <li><code>/api/chat</code> - Gemini Pro AI会話エンドポイント</li>
+                <li><code>/api/agents</code> - 利用可能エージェント一覧</li>
+                <li><code>/api/health</code> - システム状態確認</li>
+                <li><code>/api/auth/login</code> - 認証エンドポイント</li>
+            </ul>
+        </div>
+
+        <div class="feature">
+            <h3>🆚 OpenAI vs Gemini</h3>
+            <p><strong>変更点:</strong></p>
+            <ul>
+                <li>APIプロバイダー: OpenAI → Google Gemini</li>
+                <li>モデル: GPT-4 → Gemini Pro</li>
+                <li>APIキー: OPENAI_API_KEY → GEMINI_API_KEY</li>
+                <li>料金: 従量課金 → 無料枠あり</li>
+                <li>レスポンス形式: OpenAI互換から独自形式へ</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // サーバーステータスチェック
+        async function checkServerStatus() {
+            const indicator = document.getElementById('serverStatus');
+            const statusText = document.getElementById('statusText');
+            
+            try {
+                const response = await fetch('http://localhost:8080/api/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    indicator.classList.add('online');
+                    statusText.textContent = `サーバー稼働中 - ${data.provider} ${data.model}`;
+                    document.body.style.background = 'linear-gradient(135deg, #34a853 0%, #4285f4 50%, #34a853 100%)';
+                    document.title = 'MCP Agent System - Gemini Edition - サーバー稼働中';
+                } else {
+                    throw new Error('Server not responding');
+                }
+            } catch (error) {
+                indicator.classList.remove('online');
+                statusText.textContent = 'サーバー未起動 - start-server.bat を実行してください';
+                console.log('サーバー未起動:', error.message);
+            }
+        }
+        
+        // 定期的にサーバーステータスをチェック
+        setInterval(checkServerStatus, 5000);
+        checkServerStatus();
+
+        // Gemini情報表示
+        console.log('🤖 MCP Agent System - Gemini Edition');
+        console.log('Provider: Google Gemini Pro');
+        console.log('GitHub: https://github.com/chnmotoTmz/mcp-agent-system');
+    </script>
+</body>
+</html>
