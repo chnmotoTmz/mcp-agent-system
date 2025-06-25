@@ -1,0 +1,33 @@
+mcp-agent-system/
+├── backend/
+│   ├── api.ps1                    # PowerShell REST APIサーバー
+│   ├── config/
+│   │   └── settings.json          # API設定ファイル
+│   └── modules/
+│       ├── Auth.psm1              # 認証モジュール
+│       ├── OpenAI.psm1            # OpenAI API連携
+│       └── Logging.psm1           # ログ管理
+├── frontend/
+│   ├── index.html                 # メインUI
+│   ├── css/
+│   │   └── style.css              # スタイルシート
+│   ├── js/
+│   │   ├── app.js                 # メインアプリケーション
+│   │   ├── mcp-agent.js           # MCPエージェントクラス
+│   │   └── api-client.js          # バックエンド通信
+│   └── assets/
+│       └── agents/                # エージェントアバター
+├── .github/
+│   └── workflows/
+│       ├── backend-deploy.yml     # バックエンドCI/CD
+│       └── frontend-deploy.yml    # フロントエンドCI/CD
+├── scripts/
+│   ├── setup-azure.ps1            # Azure環境セットアップ
+│   ├── setup-aws.sh               # AWS環境セットアップ
+│   └── setup-gcp.sh               # GCP環境セットアップ
+├── docker/
+│   ├── Dockerfile.backend         # バックエンド用
+│   └── Dockerfile.frontend        # フロントエンド用
+├── .env.example                   # 環境変数サンプル
+├── README.md                      # プロジェクト説明
+└── LICENSE                        # ライセンス

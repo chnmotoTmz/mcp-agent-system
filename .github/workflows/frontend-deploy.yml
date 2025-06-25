@@ -1,0 +1,465 @@
+name: Frontend Deploy
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: [ 'frontend/**' ]
+  pull_request:
+    branches: [ main ]
+    paths: [ 'frontend/**' ]
+
+env:
+  NODE_VERSION: '18.x'
+  
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: Install dependencies
+      run: |
+        cd frontend
+        if [ -f package.json ]; then
+          npm ci
+        else
+          # package.json がない場合は開発用依存関係をインストール
+          npm init -y
+          npm install --save-dev \
+            eslint \
+            @eslint/js \
+            eslint-plugin-import \
+            htmlhint \
+            stylelint \
+            stylelint-config-standard \
+            prettier \
+            lighthouse \
+            puppeteer
+        fi
+        
+    - name: Lint JavaScript
+      run: |
+        cd frontend
+        # ESLint 設定作成
+        cat > .eslintrc.js << 'EOF'
+        module.exports = {
+          env: {
+            browser: true,
+            es2021: true
+          },
+          extends: ['eslint:recommended'],
+          parserOptions: {
+            ecmaVersion: 12,
+            sourceType: 'module'
+          },
+          globals: {
+            MCPAgent: 'readonly',
+            MCPAgentManager: 'readonly',
+            APIClient: 'readonly',
+            apiClient: 'readonly'
+          },
+          rules: {
+            'no-unused-vars': 'warn',
+            'no-console': 'warn',
+            'prefer-const': 'error',
+            'no-var': 'error'
+          }
+        };
+        EOF
+        
+        npx eslint js/*.js || true
+        
+    - name: Lint HTML
+      run: |
+        cd frontend
+        # HTMLHint 設定作成
+        cat > .htmlhintrc << 'EOF'
+        {
+          "tagname-lowercase": true,
+          "attr-lowercase": true,
+          "attr-value-double-quotes": true,
+          "doctype-first": true,
+          "tag-pair": true,
+          "spec-char-escape": true,
+          "id-unique": true,
+          "src-not-empty": true,
+          "attr-no-duplication": true,
+          "title-require": true
+        }
+        EOF
+        
+        npx htmlhint *.html || true
+        
+    - name: Lint CSS
+      run: |
+        cd frontend
+        # Stylelint 設定作成
+        cat > .stylelintrc.json << 'EOF'
+        {
+          "extends": ["stylelint-config-standard"],
+          "rules": {
+            "property-no-vendor-prefix": null,
+            "selector-class-pattern": null,
+            "custom-property-pattern": null,
+            "keyframes-name-pattern": null
+          }
+        }
+        EOF
+        
+        npx stylelint "css/*.css" || true
+        
+    - name: Format check
+      run: |
+        cd frontend
+        # Prettier 設定作成
+        cat > .prettierrc << 'EOF'
+        {
+          "semi": true,
+          "trailingComma": "es5",
+          "singleQuote": true,
+          "printWidth": 80,
+          "tabWidth": 2
+        }
+        EOF
+        
+        npx prettier --check "js/*.js" "css/*.css" "*.html" || true
+        
+    - name: Bundle size check
+      run: |
+        cd frontend
+        # バンドルサイズチェック
+        total_size=$(find . -name "*.js" -o -name "*.css" | xargs wc -c | tail -1 | awk '{print $1}')
+        echo "Total bundle size: $total_size bytes"
+        
+        # 1MB 制限
+        if [ $total_size -gt 1048576 ]; then
+          echo "::warning::Bundle size exceeds 1MB limit"
+        fi
+        
+    - name: Accessibility test
+      run: |
+        cd frontend
+        # Lighthouse CI用設定
+        cat > lighthouse-ci.json << 'EOF'
+        {
+          "ci": {
+            "collect": {
+              "staticDistDir": ".",
+              "url": ["http://localhost/index.html"]
+            },
+            "assert": {
+              "assertions": {
+                "categories:performance": ["warn", {"minScore": 0.8}],
+                "categories:accessibility": ["error", {"minScore": 0.9}],
+                "categories:best-practices": ["warn", {"minScore": 0.8}],
+                "categories:seo": ["warn", {"minScore": 0.8}]
+              }
+            }
+          }
+        }
+        EOF
+        
+        # HTTP サーバー起動
+        python3 -m http.server 8080 &
+        SERVER_PID=$!
+        
+        # Lighthouse 実行
+        npx lighthouse-ci autorun || true
+        
+        # サーバー停止
+        kill $SERVER_PID || true
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Build optimized bundle
+      run: |
+        cd frontend
+        
+        # 最適化されたバンドル作成
+        mkdir -p dist
+        
+        # HTML 最適化
+        cat index.html | \
+          sed 's/<!-- .* -->//g' | \
+          tr -d '\n' | \
+          sed 's/  */ /g' > dist/index.html
+          
+        # CSS 最適化
+        mkdir -p dist/css
+        cat css/style.css | \
+          sed 's/\/\*.*\*\///g' | \
+          tr -d '\n' | \
+          sed 's/  */ /g' > dist/css/style.css
+          
+        # JS 最適化（基本的な圧縮）
+        mkdir -p dist/js
+        for file in js/*.js; do
+          filename=$(basename "$file")
+          cat "$file" | \
+            sed 's/\/\/.*$//g' | \
+            sed 's/\/\*.*\*\///g' | \
+            tr -d '\n' | \
+            sed 's/  */ /g' > "dist/js/$filename"
+        done
+        
+        # アセット コピー
+        if [ -d assets ]; then
+          cp -r assets dist/
+        fi
+        
+        # ビルド情報
+        echo "{
+          \"buildTime\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+          \"commit\": \"$GITHUB_SHA\",
+          \"branch\": \"$GITHUB_REF_NAME\",
+          \"version\": \"1.0.0\"
+        }" > dist/build-info.json
+        
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-build
+        path: frontend/dist/
+        retention-days: 7
+
+  deploy-github-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+      
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build
+        path: ./dist
+        
+    - name: Setup Pages
+      uses: actions/configure-pages@v3
+      
+    - name: Upload to GitHub Pages
+      uses: actions/upload-pages-artifact@v2
+      with:
+        path: ./dist
+        
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v2
+
+  deploy-azure-static:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[azure]')
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build
+        path: ./dist
+        
+    - name: Deploy to Azure Static Web Apps
+      uses: Azure/static-web-apps-deploy@v1
+      with:
+        azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        action: 'upload'
+        app_location: './dist'
+        output_location: './dist'
+
+  deploy-aws-s3:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[aws]')
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build
+        path: ./dist
+        
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+        
+    - name: Deploy to S3
+      run: |
+        # S3 同期
+        aws s3 sync ./dist s3://${{ secrets.AWS_S3_BUCKET }} --delete
+        
+        # CloudFront 無効化
+        if [ -n "${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+        fi
+
+  deploy-gcp-storage:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[gcp]')
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build
+        path: ./dist
+        
+    - name: Setup GCP CLI
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        
+    - name: Deploy to Cloud Storage
+      run: |
+        # Cloud Storage 同期
+        gsutil -m rsync -r -d ./dist gs://${{ secrets.GCP_STORAGE_BUCKET }}
+        
+        # CDN キャッシュクリア
+        if [ -n "${{ secrets.GCP_CDN_URL_MAP }}" ]; then
+          gcloud compute url-maps invalidate-cdn-cache ${{ secrets.GCP_CDN_URL_MAP }} \
+            --path "/*" --async
+        fi
+
+  deploy-netlify:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[netlify]')
+    
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build
+        path: ./dist
+        
+    - name: Deploy to Netlify
+      uses: nwtgck/actions-netlify@v2.0
+      with:
+        publish-dir: './dist'
+        production-branch: main
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        deploy-message: "Deploy from GitHub Actions"
+        enable-pull-request-comment: false
+        enable-commit-comment: true
+      env:
+        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+
+  performance-test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build
+        path: ./dist
+        
+    - name: Performance test
+      run: |
+        cd dist
+        
+        # HTTP サーバー起動
+        python3 -m http.server 8080 &
+        SERVER_PID=$!
+        
+        # Lighthouse パフォーマンステスト
+        npm install -g lighthouse
+        lighthouse http://localhost:8080 \
+          --output json \
+          --output-path lighthouse-report.json \
+          --chrome-flags="--headless --no-sandbox"
+        
+        # 結果解析
+        node -e "
+          const report = JSON.parse(require('fs').readFileSync('lighthouse-report.json'));
+          const scores = report.categories;
+          
+          console.log('Performance Scores:');
+          Object.entries(scores).forEach(([key, category]) => {
+            const score = Math.round(category.score * 100);
+            console.log(\`\${category.title}: \${score}/100\`);
+            
+            if (score < 80) {
+              console.log(\`::warning::\${category.title} score (\${score}) is below threshold (80)\`);
+            }
+          });
+        "
+        
+        # サーバー停止
+        kill $SERVER_PID || true
+
+  security-headers-test:
+    needs: [deploy-github-pages]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Test security headers
+      run: |
+        # デプロイされたサイトのセキュリティヘッダーをチェック
+        url="${{ steps.deployment.outputs.page_url }}"
+        
+        echo "Testing security headers for: $url"
+        
+        response=$(curl -s -I "$url")
+        
+        # 必要なセキュリティヘッダーをチェック
+        headers=("X-Content-Type-Options" "X-Frame-Options" "Content-Security-Policy")
+        
+        for header in "${headers[@]}"; do
+          if echo "$response" | grep -qi "$header"; then
+            echo "✓ $header header found"
+          else
+            echo "::warning::Missing security header: $header"
+          fi
+        done
+
+  notification:
+    needs: [deploy-github-pages, deploy-azure-static, deploy-aws-s3, deploy-gcp-storage, deploy-netlify]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Notify deployment status
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: |
+          MCP Agent Frontend Deployment Status:
+          - GitHub Pages: ${{ needs.deploy-github-pages.result }}
+          - Azure Static Web Apps: ${{ needs.deploy-azure-static.result }}
+          - AWS S3: ${{ needs.deploy-aws-s3.result }}
+          - GCP Storage: ${{ needs.deploy-gcp-storage.result }}
+          - Netlify: ${{ needs.deploy-netlify.result }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

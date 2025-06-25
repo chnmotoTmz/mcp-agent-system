@@ -1,0 +1,260 @@
+name: Backend Deploy
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: [ 'backend/**' ]
+  pull_request:
+    branches: [ main ]
+    paths: [ 'backend/**' ]
+
+env:
+  AZURE_FUNCTIONAPP_NAME: mcp-agent-backend
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: './backend'
+  
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup PowerShell
+      shell: pwsh
+      run: |
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        Install-Module -Name Pester -Force -Scope CurrentUser
+        
+    - name: Run PowerShell tests
+      shell: pwsh
+      run: |
+        cd backend
+        # PowerShell テスト実行
+        if (Test-Path "./tests") {
+          Invoke-Pester -Path "./tests" -OutputFormat NUnitXml -OutputFile "TestResults.xml"
+        } else {
+          Write-Host "No tests found, skipping test execution"
+        }
+        
+    - name: Code Analysis
+      shell: pwsh
+      run: |
+        cd backend
+        # PowerShell Script Analyzer
+        Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+        $results = Invoke-ScriptAnalyzer -Path . -Recurse -Settings PSGallery
+        if ($results) {
+          $results | ForEach-Object { Write-Host "::warning::$($_.ScriptName):$($_.Line):$($_.Column): $($_.Message)" }
+        }
+
+  deploy-azure:
+    needs: test
+    runs-on: windows-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Login to Azure
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+        
+    - name: Deploy to Azure Functions
+      uses: Azure/functions-action@v1
+      with:
+        app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+        package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+        
+    - name: Test deployment
+      shell: pwsh
+      run: |
+        $endpoint = "https://${{ env.AZURE_FUNCTIONAPP_NAME }}.azurewebsites.net/api/health"
+        $maxAttempts = 10
+        $attempt = 0
+        
+        do {
+          try {
+            $response = Invoke-RestMethod -Uri $endpoint -Method Get -TimeoutSec 30
+            if ($response.status -eq "healthy") {
+              Write-Host "Deployment successful! Health check passed."
+              exit 0
+            }
+          } catch {
+            Write-Host "Health check attempt $($attempt + 1) failed: $($_.Exception.Message)"
+          }
+          
+          $attempt++
+          if ($attempt -lt $maxAttempts) {
+            Start-Sleep -Seconds 30
+          }
+        } while ($attempt -lt $maxAttempts)
+        
+        Write-Host "::error::Deployment health check failed after $maxAttempts attempts"
+        exit 1
+
+  deploy-aws:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[aws]')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+        
+    - name: Install PowerShell
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https software-properties-common
+        wget -q https://packages.microsoft.com/config/ubuntu/20.04/packages-microsoft-prod.deb
+        sudo dpkg -i packages-microsoft-prod.deb
+        sudo apt-get update
+        sudo apt-get install -y powershell
+        
+    - name: Package for Lambda
+      run: |
+        cd backend
+        # PowerShell Lambda パッケージング
+        mkdir -p lambda-package
+        cp -r * lambda-package/
+        cd lambda-package
+        
+        # Lambda エントリーポイント作成
+        cat > lambda-handler.ps1 << 'EOF'
+        using namespace Amazon.Lambda.Core
+        using namespace Amazon.Lambda.APIGatewayEvents
+        
+        [assembly:LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
+        
+        function Handler {
+            param(
+                [APIGatewayProxyRequest]$request,
+                [ILambdaContext]$context
+            )
+            
+            # メインAPIスクリプトを呼び出し
+            . ./api.ps1
+            return Handle-LambdaRequest $request $context
+        }
+        EOF
+        
+        zip -r ../mcp-agent-backend.zip *
+        
+    - name: Deploy to AWS Lambda
+      run: |
+        aws lambda update-function-code \
+          --function-name mcp-agent-backend \
+          --zip-file fileb://backend/mcp-agent-backend.zip
+          
+        # API Gateway設定
+        aws apigatewayv2 update-stage \
+          --api-id ${{ secrets.AWS_API_GATEWAY_ID }} \
+          --stage-name prod
+
+  deploy-gcp:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[gcp]')
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup GCP CLI
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+        project_id: ${{ secrets.GCP_PROJECT_ID }}
+        
+    - name: Deploy to Cloud Functions
+      run: |
+        cd backend
+        
+        # Cloud Functions用のpackage.json作成
+        cat > package.json << 'EOF'
+        {
+          "name": "mcp-agent-backend",
+          "version": "1.0.0",
+          "main": "index.js",
+          "dependencies": {
+            "@google-cloud/functions-framework": "^3.0.0"
+          }
+        }
+        EOF
+        
+        # Node.js ラッパー作成
+        cat > index.js << 'EOF'
+        const functions = require('@google-cloud/functions-framework');
+        const { exec } = require('child_process');
+        
+        functions.http('mcpAgent', (req, res) => {
+          const command = `pwsh -File api.ps1 -Method ${req.method} -Path ${req.path} -Body '${JSON.stringify(req.body)}'`;
+          
+          exec(command, (error, stdout, stderr) => {
+            if (error) {
+              res.status(500).json({ error: error.message });
+              return;
+            }
+            
+            try {
+              const result = JSON.parse(stdout);
+              res.json(result);
+            } catch (e) {
+              res.status(500).json({ error: 'Invalid response from PowerShell script' });
+            }
+          });
+        });
+        EOF
+        
+        # デプロイ
+        gcloud functions deploy mcp-agent-backend \
+          --runtime nodejs18 \
+          --trigger-http \
+          --allow-unauthenticated \
+          --memory 512MB \
+          --timeout 60s \
+          --set-env-vars OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}"
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run security scan
+      uses: securecodewarrior/github-action-add-sarif@v1
+      with:
+        sarif-file: 'security-scan-results.sarif'
+        
+    - name: Check for secrets
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./backend
+        base: main
+        head: HEAD
+
+  notification:
+    needs: [deploy-azure, deploy-aws, deploy-gcp]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Notify deployment status
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        text: |
+          MCP Agent Backend Deployment Status:
+          - Azure: ${{ needs.deploy-azure.result }}
+          - AWS: ${{ needs.deploy-aws.result }}
+          - GCP: ${{ needs.deploy-gcp.result }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
