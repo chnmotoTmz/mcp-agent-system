@@ -1,0 +1,93 @@
+# MCP Agent System - Gemini Edition Project Structure
+# Google Gemini Pro API対応版
+
+mcp-agent-system/
+├── README.md                     # プロジェクト概要（Gemini対応版）
+├── start-server.bat             # Gemini APIキー設定付きサーバー起動スクリプト
+├── quickstart.html              # Gemini Edition クイックスタートガイド
+├── project-structure.txt        # このファイル - プロジェクト構造説明
+│
+├── backend/                     # PowerShell REST APIサーバー
+│   └── api.ps1                 # Gemini Pro API統合サーバー
+│
+├── frontend/                    # JavaScript + HTML フロントエンド
+│   ├── index.html              # メインUIページ（Gemini対応）
+│   ├── css/
+│   │   └── style.css          # Geminiテーマスタイル
+│   └── js/
+│       ├── app.js             # メインアプリケーション
+│       ├── api-client.js      # Gemini API専用クライアント
+│       └── mcp-agent.js       # MCPエージェントクラス（Gemini対応）
+│
+├── scripts/                     # デプロイメント・セットアップスクリプト
+│   └── setup-azure.ps1        # Azure環境構築（Gemini対応）
+│
+└── .github/                     # CI/CD設定
+    └── workflows/
+        └── backend-deploy.yml   # GitHub Actions（Gemini Edition）
+
+## 🤖 Gemini Edition の特徴
+
+### 🔄 OpenAI → Gemini 移行内容
+- API Provider: OpenAI → Google Gemini Pro
+- Model: GPT-4 → gemini-pro
+- API Key: OPENAI_API_KEY → GEMINI_API_KEY
+- Endpoint: OpenAI Chat Completions → Gemini generateContent
+- Response Format: OpenAI互換 → Gemini Native
+
+### 🆕 新機能・改善点
+1. **Google Gemini Pro統合**
+   - ネイティブGemini API実装
+   - Gemini特有のレスポンス処理
+   - 安全性フィルター対応
+
+2. **新エージェント**
+   - 日本語スペシャリスト - 日本語特化対話
+   - Gemini最適化されたプロンプト
+
+3. **エラーハンドリング強化**
+   - Gemini特有のエラー処理
+   - SAFETY, RECITATION, BLOCKED対応
+   - 詳細なエラーメッセージ
+
+4. **パフォーマンス監視**
+   - トークン使用量追跡
+   - レスポンス品質評価
+   - Gemini特有のメトリクス
+
+### 📡 API エンドポイント
+- `/api/chat` - Gemini Pro会話API
+- `/api/agents` - エージェント一覧（Gemini対応）
+- `/api/health` - システム状態（Provider情報含む）
+- `/api/auth/login` - JWT認証
+
+### 🛠️ 技術スタック
+- **Backend**: PowerShell 7.0+ (Gemini API統合)
+- **Frontend**: Vanilla JavaScript (Gemini特化)
+- **AI Provider**: Google Gemini Pro
+- **Authentication**: JWT Token
+- **Security**: CORS, Rate Limiting, Input Validation
+- **Deployment**: Azure App Service, GitHub Actions
+
+### 🚀 起動方法
+1. Google AI Studio でAPIキー取得
+2. start-server.bat でGEMINI_API_KEY設定
+3. サーバー起動: start-server.bat
+4. フロントエンド: frontend/index.html
+
+### 🔗 重要なURL
+- Google AI Studio: https://makersuite.google.com/app/apikey
+- Gemini API Docs: https://ai.google.dev/
+- GitHub Repository: https://github.com/chnmotoTmz/mcp-agent-system
+- Health Check: http://localhost:8080/api/health
+
+### 📋 デプロイ設定
+- Azure App Service対応
+- GitHub Actions CI/CD
+- 環境変数: GEMINI_API_KEY, JWT_SECRET
+- HTTPS強制、CORS設定
+
+---
+🤖 Powered by Google Gemini Pro
+📅 Last Updated: 2024-12
+🏷️ Version: 1.1.0 (Gemini Edition)
